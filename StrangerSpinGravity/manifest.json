@@ -4,7 +4,7 @@
   "author": "Komodo",
   "name": "StrangerSpinGravity",
   "uniqueName": "Komodo.StrangerSpinGravity",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "owmlVersion": "2.7.3",
   "dependencies": []
 }
