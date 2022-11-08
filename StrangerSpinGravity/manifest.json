@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ow-mods/owml/master/schemas/manifest_schema.json",
+  "filename": "StrangerSpinGravity.dll",
+  "author": "Komodo",
+  "name": "StrangerSpinGravity",
+  "uniqueName": "Komodo.StrangerSpinGravity",
+  "version": "0.1.0",
+  "owmlVersion": "2.7.3",
+  "dependencies": []
+}
