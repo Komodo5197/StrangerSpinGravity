@@ -17,7 +17,6 @@ namespace StrangerSpinGravity
 
         private void Start()
         {
-            ModHelper.Console.WriteLine($"Loaded StrangerSpinGravity");
             ModHelper.HarmonyHelper.AddPostfix<RingWorldForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
             ModHelper.HarmonyHelper.AddPostfix<CylindricalForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
             ModHelper.HarmonyHelper.AddPostfix<DirectionalForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
