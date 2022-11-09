@@ -14,9 +14,11 @@ namespace StrangerSpinGravity
         public static bool DepartureComp = true;
         public static bool FreeRotate = false;
         public static OWRigidbody ringworld = null;
+        public static System.Collections.Generic.Dictionary<int, Vector3> raftLocalStart;
 
         private void Start()
         {
+            raftLocalStart = new System.Collections.Generic.Dictionary<int, Vector3>();
             ModHelper.HarmonyHelper.AddPostfix<RingWorldForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
             ModHelper.HarmonyHelper.AddPostfix<CylindricalForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
             ModHelper.HarmonyHelper.AddPostfix<DirectionalForceVolume>("CalculateForceAccelerationAtPoint", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.PointForce));
@@ -25,6 +27,8 @@ namespace StrangerSpinGravity
             ModHelper.HarmonyHelper.AddPrefix<RingWaveFluidVolume>("GetBuoyancy", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.InertialBuoyancyWave));
             ModHelper.HarmonyHelper.AddPrefix<ShipThrusterModel>("FixedUpdate", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.AngleUpdate));
             ModHelper.HarmonyHelper.AddPrefix<JetpackThrusterModel>("FixedUpdate", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.AngleUpdate));
+            ModHelper.HarmonyHelper.AddPrefix<RaftController>("UpdateMoveToTarget", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.RaftImpreciseTargeting));
+            ModHelper.HarmonyHelper.AddPrefix<RaftController>("MoveToTarget", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.RecordStart));
         }
 
         // Set angular velocity drag for ship and player
@@ -98,6 +102,64 @@ namespace StrangerSpinGravity
             __instance.GetRingWorldBody().SetAngularVelocity(current + change);
             return true;
         }
+
+        // Save local start position for use with snapping
+        public static bool RecordStart(RaftController __instance)
+        {
+            Transform transform = __instance._raftBody.GetOrigParentBody().transform;
+            Vector3 localStart = transform.InverseTransformPoint(__instance._raftBody.GetPosition());
+            raftLocalStart[__instance.GetInstanceID()]=localStart;
+            return true;
+        }
+
+        // Improve raft alignment and target detection when docking
+        public static bool RaftImpreciseTargeting(RaftController __instance)
+        {
+            OWRigidbody raftBody = __instance._raftBody;
+            OWRigidbody origParentBody = __instance._raftBody.GetOrigParentBody();
+            Transform transform = origParentBody.transform;
+            Vector3 worldTarget = transform.TransformPoint(__instance._targetLocalPosition);
+            Vector3 startLocalPosition = raftLocalStart[__instance.GetInstanceID()];
+
+            // Check if we flagged the raft to reach its destination this frame
+            if (startLocalPosition != __instance._targetLocalPosition)
+            {
+                // Snap raft to line between start and end
+                // This prevents collisions with dock and dam edges at high gravities
+                Vector3 localRaft = transform.InverseTransformPoint(__instance._raftBody.GetPosition());
+                Vector3 localAligned = Vector3.Project(localRaft - startLocalPosition, __instance._targetLocalPosition - startLocalPosition) + startLocalPosition;
+                Vector3 worldAligned = transform.TransformPoint(localAligned);
+                Vector3 alignedVelocity = (worldAligned-__instance._raftBody.GetPosition()) / Time.deltaTime;
+			    
+			    Vector3 worldOffset = worldTarget - worldAligned;
+			    float d = Mathf.Min(__instance._targetSpeed, worldOffset.magnitude / Time.deltaTime);
+			    if (worldOffset.magnitude / Time.deltaTime <= __instance._targetSpeed)
+			    {
+				    // Flag raft to reach destination next frame
+				    raftLocalStart[__instance.GetInstanceID()] = __instance._targetLocalPosition;
+			    }
+			    Vector3 pointVelocity = raftBody.GetOrigParentBody().GetPointVelocity(raftBody.GetPosition());
+			    Vector3 targetVelocity = worldOffset.normalized * d;
+			    raftBody.SetVelocity(pointVelocity + targetVelocity + alignedVelocity);
+
+			    float num = Mathf.InverseLerp(__instance._startDistance, 0.0f, worldOffset.magnitude);
+			    __instance.currentDistanceLerp = num;
+			    num = Mathf.SmoothStep(0f, 1f, num);
+                Quaternion rhs = Quaternion.Slerp(__instance._startLocalRotation, __instance._targetLocalRotation, num);
+                Quaternion toRotation = transform.rotation * rhs;
+                Vector3 b2 = OWPhysics.FromToAngularVelocity(raftBody.GetRotation(), toRotation);
+                raftBody.SetAngularVelocity(origParentBody.GetAngularVelocity() + b2);
+            }
+            else
+            {
+                raftBody.SetPosition(worldTarget);
+                raftBody.SetRotation(transform.rotation * __instance._targetLocalRotation);
+                __instance.StopMovingToTarget();
+                __instance.OnArriveAtTarget.Invoke();
+            }
+            return false;
+        }
+
         public override void Configure(IModConfig config)
         {
             // This puts the stranger ground level at ~1.3g as usual.
