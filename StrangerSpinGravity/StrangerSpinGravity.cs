@@ -25,6 +25,7 @@ namespace StrangerSpinGravity
             ModHelper.HarmonyHelper.AddPrefix<RingWorldController>("FixedUpdate", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.ControllerUpdate));
             ModHelper.HarmonyHelper.AddPrefix<RingRiverFluidVolume>("GetBuoyancy", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.InertialBuoyancy));
             ModHelper.HarmonyHelper.AddPrefix<RingWaveFluidVolume>("GetBuoyancy", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.InertialBuoyancyWave));
+            ModHelper.HarmonyHelper.AddPrefix<FlatFluidVolume>("GetBuoyancy", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.InertialBuoyancyFlat));
             ModHelper.HarmonyHelper.AddPrefix<ShipThrusterModel>("FixedUpdate", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.AngleUpdate));
             ModHelper.HarmonyHelper.AddPrefix<JetpackThrusterModel>("FixedUpdate", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.AngleUpdate));
             ModHelper.HarmonyHelper.AddPrefix<RaftController>("UpdateMoveToTarget", typeof(StrangerSpinGravity), nameof(StrangerSpinGravity.RaftImpreciseTargeting));
@@ -45,6 +46,25 @@ namespace StrangerSpinGravity
             {
                 __result *= GravFactor;
             }
+        }
+
+        // Add inertia to diving bell buoyancy calculation
+        public static bool InertialBuoyancyFlat(ref Vector3 __result, FlatFluidVolume __instance, FluidDetector detector, float fractionSubmerged)
+        {
+            if (detector.GetAttachedOWRigidbody().GetAttachedForceDetector() != null)
+            {
+                Vector3 a = detector.GetAttachedOWRigidbody().GetAttachedForceDetector().GetForceAcceleration() - __instance._attachedBody.GetAttachedForceDetector().GetForceAcceleration();
+                if (ringworld != null && __instance._attachedBody == ringworld)
+                {
+                    a -= __instance._attachedBody.GetPointCentripetalAcceleration(detector.GetAttachedOWRigidbody().GetWorldCenterOfMass()) * 0.9f;
+                }
+                __result = Vector3.Project(-(a), __instance.transform.up) * fractionSubmerged * __instance._buoyancyDensity / detector.GetBuoyancyData().density;
+            }
+            else
+            {
+                __result = Vector3.zero;
+            }
+            return false;
         }
 
         // Add inertia to river buoyancy calculation
